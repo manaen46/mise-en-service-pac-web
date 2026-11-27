@@ -66,7 +66,9 @@ function preparer(im,genre){const G=gris(im,2000),{w,h}=G,M=Math.max(w,h),clair=
 const mediane=a=>{const s=[...a].sort((x,y)=>x-y);return s.length?s[s.length>>1]:0};
 function lignesTsv(tsv,k){const L=new Map();k=k||1;
   for(const row of String(tsv||"").split("\n")){const c=row.split("\t");if(c.length<12||c[0]!=="5")continue;
-    const t=c.slice(11).join("\t").trim(),conf=parseFloat(c[10]);if(!t||!(conf>=35)||!/[0-9A-Za-zÀ-ÿ]/.test(t))continue; /* un mot sans lettre ni chiffre : un reste de cadre */
+    const t=c.slice(11).join("\t").trim(),conf=parseFloat(c[10]);if(!t||!/[0-9A-Za-zÀ-ÿ]/.test(t))continue; /* un mot sans lettre ni chiffre : un reste de cadre */
+    /* mots douteux écartés, sauf ceux qui ont la forme d'une référence ou d'un n° de série (le lecteur s'en méfie à tort) */
+    if(!(conf>=35||(conf>=10&&/^[A-Z0-9][A-Z0-9\-\/.]{4,}$/.test(t)&&/\d/.test(t)&&/[A-Z]/.test(t))))continue;
     const cle=c[1]+"-"+c[2]+"-"+c[3]+"-"+c[4],x=+c[6],y=+c[7],w=+c[8],h=+c[9];let l=L.get(cle);if(!l)L.set(cle,l={m:[]});l.m.push({t,x,y,w,h})}
   const V=[...L.values()],pentes=[];
   for(const l of V){l.m.sort((a,b)=>a.x-b.x);const a=l.m[0],b=l.m[l.m.length-1];l.h=mediane(l.m.map(m=>m.h));
