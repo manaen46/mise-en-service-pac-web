@@ -80,6 +80,8 @@ const SECTIONS=[
  {id:"hydro",t:"Circuit hydraulique",only:isEau,items:[
   {f:"rincage",k:1,l:"Rinçage / désembouage du réseau"},
   {f:"filtre",k:1,l:"Filtre / pot à boues (magnétique)"},
+  {f:"traitEau",k:1,l:"Traitement de l'eau du circuit (inhibiteur)"},
+  {f:"traitProd",x:1,bloc:1,l:"Traitement de l'eau : nom du produit",ph:"Ex. : inhibiteur, désembouant, antigel…"},
   {f:"pression",n:1,l:"Pression du circuit à froid",u:"bar"},
   {f:"purge",k:1,l:"Purge d'air du circuit"},
   {f:"vase",n:1,l:"Pré-gonflage du vase d'expansion",u:"bar"},
@@ -393,9 +395,11 @@ function tabMes(P){const M=P.mes;
   const secs=SECTIONS.map(s=>{const its=secItems(s,P.type);if(!its.length)return"";
     const k=its.filter(i=>i.k),d=k.filter(i=>M[i.f]).length;
     const cks=k.map(i=>ckRow(M,i)).join("");
-    const nums=its.filter(i=>!i.k).map(i=>i.s?`<div class="f full"><span class="label">${esc(i.l)}</span>${radios(M,i.f,i.s.map(x=>[x,x]))}</div>`:fld(M,i.f,esc(i.l),i.n?"num":"text",{u:i.u,ph:i.ph})).join("");
+    const nums=its.filter(i=>!i.k&&!i.bloc).map(i=>i.s?`<div class="f full"><span class="label">${esc(i.l)}</span>${radios(M,i.f,i.s.map(x=>[x,x]))}</div>`:fld(M,i.f,esc(i.l),i.n?"num":"text",{u:i.u,ph:i.ph})).join("");
     return`<details class="sec" open><summary>${esc(s.t)}<span class="n">${k.length?`${d}/${k.length}`:""}</span></summary>
      <div class="box">${s.rel?ecranBar(P):""}${cks?`<div>${cks}</div>`:""}${nums?`<div class="nrow">${nums}</div>`:""}
+     ${s.id==="hydro"?`<div class="nrow">${fld(M,"traitProd","Traitement de l'eau : nom du produit","text",{full:1,ph:"Ex. : inhibiteur, désembouant, antigel…"})}</div>
+      <div><span class="label">Photos du traitement de l'eau</span>${photoRow(P.photos,"traitEau")}<span class="hint">Bidon, étiquette du produit, étiquette posée sur le réseau.</span></div>`:""}
      ${k.length&&d<k.length?`<button class="btn sm" type="button" data-act="allOk" data-s="${s.id}">Tout le reste OK</button>`:""}</div></details>${s.rel&&isEau(P.type)?radBox(P):""}`}).join("");
   const nc=SECTIONS.flatMap(s=>secItems(s,P.type)).filter(i=>i.k&&M[i.f]==="nc");
   return`${nc.length?`<div class="note bad"><b>${nc.length} point${nc.length>1?"s":""} non conforme${nc.length>1?"s":""}</b> : ${esc(nc.map(i=>i.l).join(" ; "))}. Précise-les dans les observations.</div>`:""}
@@ -440,6 +444,7 @@ function tabCerfa(P){const K=P.cerfa,E=CFG.ent,D=det(P.det),t=tranche(P);
   <button class="btn" type="button" data-act="cerfaOff">Pas de fiche d'intervention pour cette PAC</button>`}
 const uiLbl=P=>isEau(P.type)?"Module hydraulique":P.type==="aax"?"Unités intérieures":"Unité intérieure";
 function photoGroups(P){return[["Unité extérieure",[["plaqUE","Plaque signalétique"],["instUE","Installation"]]],[uiLbl(P),[["plaqUI","Plaque signalétique"],["instUI","Installation"]]],["Écran de la PAC",[["ecran","Relevés affichés (régulation)"]]],
+  ...(isEau(P.type)||(P.photos.traitEau||[]).length?[["Circuit hydraulique",[["traitEau","Traitement de l'eau"]]]]:[]),
   ...((P.photos.radiat||[]).length?[["Radiateurs (photos non classées)",[["radiat","Températures des radiateurs"]]]]:[]),["Autres photos",[["plaques","Plaques"],["instal","Installation"]]]]}
 function autoNum(P){return(P.date||today()).replace(/-/g,"")+"-"+String(C.pacs.indexOf(P)+1).padStart(2,"0")}
 function tabSign(P){const S=P.sig,T=tech(P.tech);
@@ -1114,7 +1119,7 @@ function sample(){
   const c={...blankChantier(),exemple:true,nom:"Lotissement Les Prés",clientNom:"M. et Mme Martin",clientAdr:"8 rue des Prés, 62450 Bapaume",clientTel:"06 12 34 56 78",clientMail:"martin.exemple@mail.fr",notes:"Exemple : deux PAC mises en service le même jour."};
   const P1=blankPac();Object.assign(P1,{repere:"Maison lot 4",type:"aes",marque:"Atlantic",gamme:"Alféa Extensa Duo",modUE:"AWZ 8 R32",serUE:"2408-55123",modUI:"MOD HYD DUO 8",serUI:"2409-77810",puis:"8",fluide:"R32",prg:675,chargeUsine:"1.4",chargeComp:"0.3",locUE:"Façade nord, sur plots",locUI:"Cellier",date:today()});
   P1.mes.rads=[{id:uid(),lieu:"Séjour",t:"36"},{id:uid(),lieu:"Chambre 1",t:"34"},{id:uid(),lieu:"Salle de bain",t:"37"}];Object.assign(P1.mes,{uePose:"ok",uiPose:"ok",tension:"232",disj:"32 A courbe C",section:"3G6 mm²",tensionUI:"231",disjUI:"2 A courbe C",sectionUI:"3G1,5 mm²",appPuis:"6",appTension:"400 V tri",appDisj:"16 A courbe C",appSection:"5G2,5 mm²",terre:"ok",bus:"ok",long:"12",diam:"1/4\" - 5/8\"",raccords:"ok",azote:"40",azoteH:"24",vide:"1",videH:"2",videTenue:"ok",vannes:"ok",etanch:"ok",
-    rincage:"ok",filtre:"ok",pression:"1.5",purge:"ok",vase:"1",glycol:"0",soupape:"ok",ecs:"ok",appoint:"ok",mode:"Chaud",text:"7",hp:"26.5",bp:"8.2",tref:"68",sc:"5",sr:"4",tdep:"38",tret:"33",debit:"22,5",intens:"9.4",
+    rincage:"ok",filtre:"ok",traitEau:"ok",traitProd:"Inhibiteur de corrosion 1 L",pression:"1.5",purge:"ok",vase:"1",glycol:"0",soupape:"ok",ecs:"ok",appoint:"ok",mode:"Chaud",text:"7",hp:"26.5",bp:"8.2",tref:"68",sc:"5",sr:"4",tdep:"38",tret:"33",debit:"22,5",intens:"9.4",
     loi:"pente 0,5 / décalage 0",tdepMax:"45",consigne:"20",consEcs:"52",sonde:"ok",connect:"ok",antileg:"ok",expli:"ok",notice:"ok",garantie:"ok",entretien:"ok",obs:"Installation conforme. Client informé du réglage de la loi d'eau."});
   P1.photos.plaqUE=[samplePlate("UNITE EXTERIEURE",["Modele : AWZ 8 R32","N serie : 2408-55123","Fluide : R32  1,40 kg","PS HP 42 bar  BP 23 bar"])];
   P1.photos.plaqUI=[samplePlate("MODULE HYDRAULIQUE",["Modele : MOD HYD DUO 8","N serie : 2409-77810","Appoint : 6 kW 400 V"])];
