@@ -44,6 +44,9 @@ jobs:
           CV=$(node -p "require('$CORE/package.json').version")
           echo "{\"tesseract\":\"$TV\",\"core\":\"$CV\",\"langue\":\"$(basename $(dirname $LANGUE))\"}" > _site/ocr/fichiers.json
           sed -i "s/__VERSION__/${GITHUB_SHA::10}/; s/__LECTEUR__/$TV-$CV/" _site/sw.js
+          # codes d'accès : une empreinte par fichier du dossier codes/ (ajoutés depuis les Réglages de l'appli)
+          { cat codes/*.txt 2>/dev/null || true; } | grep -oE '^[0-9a-f]{64}' | sort -u | jq -R . | jq -sc . > _site/codes.json
+          echo "codes : $(jq length _site/codes.json)"
           touch _site/.nojekyll
           cat _site/ocr/fichiers.json; ls -la _site _site/ocr
 

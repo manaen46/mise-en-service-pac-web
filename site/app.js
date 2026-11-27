@@ -320,7 +320,8 @@ function renderCfg(){
   <button class="btn" type="button" data-act="newDet">+ Détecteur</button>
   <h2 class="sec">Ma signature</h2>
   <div class="box sigbox"><div class="sigimg" data-act="padTechCfg">${CFG.sigTech?`<img src="${CFG.sigTech}" alt="Signature">`:"Touche pour signer"}</div>
-   <span class="hint">Proposée sur chaque PAC pour éviter de re-signer à chaque fois.</span>${CFG.sigTech?`<button class="btn sm danger" type="button" data-act="delSigCfg">Effacer ma signature</button>`:""}</div>`}
+   <span class="hint">Proposée sur chaque PAC pour éviter de re-signer à chaque fois.</span>${CFG.sigTech?`<button class="btn sm danger" type="button" data-act="delSigCfg">Effacer ma signature</button>`:""}</div>
+  ${codesBox()}`}
 function addYears(d,n){const x=new Date(d+"T12:00:00");x.setFullYear(x.getFullYear()+n);return x.toISOString().slice(0,10)}
 
 /* ---------------- Chantier ---------------- */
@@ -716,6 +717,12 @@ document.addEventListener("change",e=>{const t=e.target;if(t.tagName!=="SELECT"|
 
 /* ---------------- Boutons ---------------- */
 const ACT={
+  /* codes d'accès de la version en ligne (Réglages de Manaen) */
+  codeCreer(){codeCreer()},
+  codeRetirer(t){confirmDel=t.dataset.id;redessiner()},
+  codeRetire(t){const c=(CFG.codes||[]).find(c=>c.id===t.dataset.id);if(!c)return;const u=t.getAttribute("href");
+    if(NATIVE)location.href=u;else window.open(u,"_blank","noopener");c.retire=today();confirmDel=null;saveCfg();setTimeout(redessiner,300)},
+  codeOubli(t){CFG.codes=(CFG.codes||[]).filter(c=>c.id!==t.dataset.id);saveCfg();redessiner()},
   /* version web : installation sur l'écran d'accueil */
   installer(){if(invite){invite.prompt();invite=null;render()}},
   installNon(){regler("mes-install","non");render()},
@@ -1145,17 +1152,26 @@ function webDemarrer(){if(NATIVE)return;
   if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{}); /* demande au téléphone de ne pas effacer les chantiers */
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();invite=e;if(V.v==="home")render()})}
 
-/* Codes d'accès de la version en ligne : un code par personne, donné par Manaen. Demandé une fois par téléphone, puis revérifié à chaque
-   ouverture : un code retiré de la liste ferme l'appli à cette personne (ses chantiers restent sur son téléphone).
-   Seules les empreintes sont écrites ici (SHA-256 de « mespac: » suivi du code) ; la liste nom ↔ code est dans web/codes.md (dépôt privé).
-   Ni l'appli Android ni la version PC ne demandent de code. */
+/* Codes d'accès de la version en ligne : un code par personne, créé par Manaen depuis ses Réglages.
+   - CODES_WEB : le code de Manaen, toujours valable ;
+   - codes.json : les autres codes, publiés avec le site (fabriqué à la mise en ligne à partir du dossier codes/ du dépôt public).
+   Seules les empreintes sont publiées (SHA-256 de « mespac: » suivi du code), jamais les codes ni les noms.
+   Demandé une fois par téléphone, puis revérifié à chaque ouverture avec réseau : un code retiré ferme l'appli à cette personne
+   (ses chantiers restent sur son téléphone). Ni l'appli Android ni la version PC ne demandent de code. */
 const MAIL_CODES="manaenpro@gmail.com"; /* les demandes de code arrivent à cette adresse */
+const SITE_WEB="https://manaen46.github.io/mise-en-service-pac-web/",DEPOT_WEB="https://github.com/manaen46/mise-en-service-pac-web";
 const CODES_WEB=[
   "d2a0d9eecff8aeacf51d5d800f73a35ebe28ea0779fdb1d880cdda04b2af3732",
 ];
 async function empreinte(t){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("mespac:"+t));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
-function acces(){if(NATIVE||location.protocol!=="https:"||!CODES_WEB.length||!(window.crypto&&crypto.subtle)||CODES_WEB.includes(reglage("mes-acces")))return Promise.resolve();
-  const retire=!!reglage("mes-acces");
+/* liste publiée avec le site ; null si elle n'a pas pu être lue (hors réseau, première ouverture) */
+async function codesPublies(){try{const r=await fetch("codes.json",{cache:"no-cache"});if(!r.ok)return null;const j=await r.json();
+  return Array.isArray(j)?j.filter(h=>typeof h==="string"&&/^[0-9a-f]{64}$/.test(h)):null}catch(e){return null}}
+async function acces(){if(NATIVE||location.protocol!=="https:"||!(window.crypto&&crypto.subtle))return;
+  const pub=await codesPublies(),liste=[...CODES_WEB,...(pub||[])],moi=reglage("mes-acces");
+  /* déjà entré : valable s'il est toujours dans la liste, ou si la liste n'a pas pu être lue (hors réseau) */
+  if(moi&&(liste.includes(moi)||(pub===null&&/^[0-9a-f]{64}$/.test(moi))))return;
+  const retire=!!moi;
   return new Promise(ok=>{const d=document.createElement("div");d.className="verrou";
     d.innerHTML=`<form class="box"><div class="brand">Mise en Service <span>PAC</span></div><label class="f"><span class="label">Code d'accès</span>
       <input type="password" inputmode="numeric" autocomplete="current-password" id="codeAcces" required></label><span class="hint" id="codeMsg">${retire?"Ton code n'est plus valable. Demande un nouveau code à Manaen : tes chantiers sont toujours sur ce téléphone.":"Demande ton code à Manaen."}</span>
@@ -1168,8 +1184,37 @@ function acces(){if(NATIVE||location.protocol!=="https:"||!CODES_WEB.length||!(w
       const corps=`Bonjour,\n\nJe suis ${nom}. Je voudrais un code d'accès pour l'appli Mise en Service PAC.\n\nMerci.`;
       location.href="mailto:"+MAIL_CODES+"?subject="+encodeURIComponent("Demande de code - Mise en Service PAC - "+nom)+"&body="+encodeURIComponent(corps);
       m.textContent="Envoie le mail qui s'ouvre. Tu recevras ton code en réponse.";m.style.color=""};
-    f.onsubmit=async e=>{e.preventDefault();const h=await empreinte(i.value.trim());if(CODES_WEB.includes(h)){regler("mes-acces",h);d.remove();ok();return}
+    f.onsubmit=async e=>{e.preventDefault();const h=await empreinte(i.value.trim());let L=liste;
+      if(!CODES_WEB.includes(h)&&!(pub||[]).includes(h)){const p2=await codesPublies();if(p2)L=[...CODES_WEB,...p2]; /* code tout juste créé */
+        else if(pub===null){m.textContent="Pas de réseau : la première ouverture en demande. Réessaie avec du réseau.";m.style.color="var(--bad)";return}}
+      if(L.includes(h)){regler("mes-acces",h);d.remove();ok();return}
       essais++;i.value="";m.textContent="Code incorrect.";m.style.color="var(--bad)";if(essais>=3){f.querySelector("button").disabled=true;setTimeout(()=>f.querySelector("button").disabled=false,essais*3000)}}})}
+
+/* Réglages de Manaen : créer et retirer les codes. Le code et le nom restent sur son téléphone (CFG.codes) ;
+   seule l'empreinte est publiée, en ajoutant un fichier codes/xxxxxxxx.txt au dépôt public (GitHub ouvre la page d'ajout déjà remplie). */
+const estManaen=()=>!!NATIVE||reglage("mes-acces")===CODES_WEB[0];
+const fichierCode=c=>"codes/"+c.h.slice(0,12)+".txt";
+const lienAjout=c=>DEPOT_WEB+"/new/main?filename="+encodeURIComponent(fichierCode(c))+"&value="+encodeURIComponent(c.h+"\n");
+const lienFichier=c=>DEPOT_WEB+"/blob/main/"+fichierCode(c);
+function mailCode(c){const corps=`Bonjour,\n\nVoici ton code d'accès à l'appli Mise en Service PAC : ${c.code}\n\nAdresse de l'appli : ${SITE_WEB}\nSur iPhone : ouvre l'adresse dans Safari, touche Partager puis « Sur l'écran d'accueil ».\nSur Android : ouvre l'adresse dans Chrome, puis menu ⋮ et « Installer l'application ».\n\nLe code est personnel, merci de ne pas le transmettre.`;
+  return"mailto:"+(c.mail?encodeURIComponent(c.mail):"")+"?subject="+encodeURIComponent("Ton code - Mise en Service PAC")+"&body="+encodeURIComponent(corps)}
+function codesBox(){if(!estManaen())return"";const L=CFG.codes||[],ext=NATIVE?"":` target="_blank" rel="noopener"`;
+  return`<h2 class="sec">Codes d'accès (version en ligne) <span class="n">${L.filter(c=>!c.retire).length||""}</span></h2>
+  <div class="box"><span class="hint">Pour donner l'appli en ligne à quelqu'un : crée son code, active-le sur GitHub (une page déjà remplie s'ouvre, touche « Commit changes »), puis envoie-le-lui. Il marche 2 minutes après l'activation.</span>
+   <div class="grid2">${fld({id:"nc",v:codeNom},"v","Nom de la personne","text",{full:1,ph:"Ex. : Jean Dupont"})}${fld({id:"nm",v:codeMail},"v","Son mail (facultatif)","email",{full:1,ph:"Pour lui envoyer le code"})}</div>
+   <button class="btn primary" type="button" data-act="codeCreer">Créer un code</button>
+   ${L.map(c=>`<div class="codeli${c.retire?" retire":""}"><div class="m"><b>${esc(c.nom)}</b><span class="code">${c.retire?"retiré":esc(c.code)}</span><span class="hint">Créé le ${fmtDate(c.date)}${c.retire?` · retiré le ${fmtDate(c.retire)}`:""}</span></div>
+     ${c.retire?`<div class="actions"><a class="btn sm" href="${lienFichier(c)}"${ext}>Vérifier sur GitHub qu'il est supprimé</a><button class="btn sm" type="button" data-act="codeOubli" data-id="${c.id}">Effacer de la liste</button></div>`
+      :`<div class="actions"><a class="btn sm primary" href="${lienAjout(c)}"${ext}>1. Activer sur GitHub</a><a class="btn sm" href="${mailCode(c)}">2. Envoyer par mail</a>
+       ${confirmDel===c.id?`<span class="hint">Sur GitHub, supprime le fichier qui s'ouvre (menu ⋯ puis « Delete file », puis « Commit changes »).</span><a class="btn sm danger" href="${lienFichier(c)}"${ext} data-act="codeRetire" data-id="${c.id}">Ouvrir GitHub et retirer</a><button class="btn sm" type="button" data-act="cancelDel">Annuler</button>`
+        :`<button class="btn sm danger" type="button" data-act="codeRetirer" data-id="${c.id}">Retirer</button>`}</div>`}</div>`).join("")}
+  </div>`}
+let codeNom="",codeMail="";
+document.addEventListener("input",e=>{const t=e.target;if(!t.dataset)return;if(t.dataset.id==="nc")codeNom=t.value;else if(t.dataset.id==="nm")codeMail=t.value});
+async function codeCreer(){const nom=codeNom.trim();if(!nom){toast("Écris d'abord le nom de la personne.");return}
+  const L=CFG.codes=CFG.codes||[];let code,h;
+  do{const a=new Uint32Array(1);crypto.getRandomValues(a);code=String(100000+a[0]%900000);h=await empreinte(code)}while(CODES_WEB.includes(h)||L.some(c=>c.h===h));
+  L.unshift({id:uid(),nom,mail:codeMail.trim(),code,h,date:today(),retire:""});codeNom="";codeMail="";saveCfg();redessiner();toast(`Code de ${nom} : ${code}. Active-le sur GitHub.`,5000)}
 
 /* ---------------- Démarrage ---------------- */
 (async()=>{await acces();CFG=Object.assign(blankCfg(),(await kvGet("cfg"))||{});INDEX=(await kvGet("index"))||[];render();webDemarrer()})();

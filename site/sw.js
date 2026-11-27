@@ -30,7 +30,7 @@ async function reseauDabord(req){const c=await caches.open(LECTEUR);
 
 self.addEventListener("fetch",e=>{const req=e.request;if(req.method!=="GET")return;const u=new URL(req.url);if(u.origin!==location.origin)return;
   const ici=new URL("./",self.registration.scope).pathname,chemin=u.pathname.startsWith(ici)?u.pathname.slice(ici.length):u.pathname;
-  if(chemin==="ocr/fichiers.json"){e.respondWith(reseauDabord(req));return}
+  if(chemin==="ocr/fichiers.json"||chemin==="codes.json"){e.respondWith(reseauDabord(req));return} /* codes : une personne retirée doit l'être vite */
   if(chemin.startsWith("ocr/")){e.respondWith(lecteur(req));return}
   if(req.mode==="navigate"){e.respondWith(memoireDabord(e,"index.html"));return}
   e.respondWith(memoireDabord(e,req))});
