@@ -1140,5 +1140,19 @@ function webDemarrer(){if(NATIVE)return;
   if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{}); /* demande au téléphone de ne pas effacer les chantiers */
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();invite=e;if(V.v==="home")render()})}
 
+/* Code d'accès de la version en ligne : seules les personnes qui ont le code ouvrent l'appli.
+   Seule l'empreinte du code est écrite ici (le code lui-même n'est nulle part dans le site). Demandé une fois par téléphone.
+   Ni l'appli Android ni la version PC ne le demandent. Pour changer de code : empreinte = SHA-256 de « mespac: » suivi du code. */
+const CODE_WEB="d2a0d9eecff8aeacf51d5d800f73a35ebe28ea0779fdb1d880cdda04b2af3732";
+async function empreinte(t){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("mespac:"+t));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+function acces(){if(NATIVE||location.protocol!=="https:"||!CODE_WEB||!(window.crypto&&crypto.subtle)||reglage("mes-acces")===CODE_WEB)return Promise.resolve();
+  return new Promise(ok=>{const d=document.createElement("div");d.className="verrou";
+    d.innerHTML=`<form class="box"><div class="brand">Mise en Service <span>PAC</span></div><label class="f"><span class="label">Code d'accès</span>
+      <input type="password" inputmode="numeric" autocomplete="current-password" id="codeAcces" required></label><span class="hint" id="codeMsg">Demande le code à la personne qui t'a donné l'adresse.</span>
+      <button class="btn primary" type="submit">Ouvrir</button></form>`;
+    document.body.appendChild(d);const f=d.querySelector("form"),i=d.querySelector("input"),m=d.querySelector("#codeMsg");setTimeout(()=>i.focus(),50);let essais=0;
+    f.onsubmit=async e=>{e.preventDefault();if(await empreinte(i.value.trim())===CODE_WEB){regler("mes-acces",CODE_WEB);d.remove();ok();return}
+      essais++;i.value="";m.textContent="Code incorrect.";m.style.color="var(--bad)";if(essais>=3){f.querySelector("button").disabled=true;setTimeout(()=>f.querySelector("button").disabled=false,essais*3000)}}})}
+
 /* ---------------- Démarrage ---------------- */
-(async()=>{CFG=Object.assign(blankCfg(),(await kvGet("cfg"))||{});INDEX=(await kvGet("index"))||[];render();webDemarrer()})();
+(async()=>{await acces();CFG=Object.assign(blankCfg(),(await kvGet("cfg"))||{});INDEX=(await kvGet("index"))||[];render();webDemarrer()})();
