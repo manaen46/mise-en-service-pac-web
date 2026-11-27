@@ -1140,7 +1140,7 @@ function webDemarrer(){if(NATIVE)return;
   if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{}); /* demande au téléphone de ne pas effacer les chantiers */
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();invite=e;if(V.v==="home")render()})}
 
-/* Codes d'accès de la version en ligne : un code par personne, donné par Franck. Demandé une fois par téléphone, puis revérifié à chaque
+/* Codes d'accès de la version en ligne : un code par personne, donné par Manaen. Demandé une fois par téléphone, puis revérifié à chaque
    ouverture : un code retiré de la liste ferme l'appli à cette personne (ses chantiers restent sur son téléphone).
    Seules les empreintes sont écrites ici (SHA-256 de « mespac: » suivi du code) ; la liste nom ↔ code est dans web/codes.md (dépôt privé).
    Ni l'appli Android ni la version PC ne demandent de code. */
@@ -1152,7 +1152,7 @@ function acces(){if(NATIVE||location.protocol!=="https:"||!CODES_WEB.length||!(w
   const retire=!!reglage("mes-acces");
   return new Promise(ok=>{const d=document.createElement("div");d.className="verrou";
     d.innerHTML=`<form class="box"><div class="brand">Mise en Service <span>PAC</span></div><label class="f"><span class="label">Code d'accès</span>
-      <input type="password" inputmode="numeric" autocomplete="current-password" id="codeAcces" required></label><span class="hint" id="codeMsg">${retire?"Ton code n'est plus valable. Demande un nouveau code à Franck : tes chantiers sont toujours sur ce téléphone.":"Demande ton code à Franck."}</span>
+      <input type="password" inputmode="numeric" autocomplete="current-password" id="codeAcces" required></label><span class="hint" id="codeMsg">${retire?"Ton code n'est plus valable. Demande un nouveau code à Manaen : tes chantiers sont toujours sur ce téléphone.":"Demande ton code à Manaen."}</span>
       <button class="btn primary" type="submit">Ouvrir</button></form>`;
     document.body.appendChild(d);const f=d.querySelector("form"),i=d.querySelector("input"),m=d.querySelector("#codeMsg");setTimeout(()=>i.focus(),50);let essais=0;
     f.onsubmit=async e=>{e.preventDefault();const h=await empreinte(i.value.trim());if(CODES_WEB.includes(h)){regler("mes-acces",h);d.remove();ok();return}
