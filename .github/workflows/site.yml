@@ -1,0 +1,61 @@
+name: Mise en ligne
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: site
+  cancel-in-progress: true
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Lecteur de texte (Tesseract) et PDF (jsPDF)
+        run: |
+          mkdir -p /tmp/dep && cd /tmp/dep
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund tesseract.js@7 @tesseract.js-data/fra playwright-core
+          curl -fsSL -o /tmp/jspdf.umd.min.js https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
+          echo "98ccf17aa10c20bb1301762618fcc9b6ab3a4e7f26b6071d64d0b41154df3875  /tmp/jspdf.umd.min.js" | sha256sum -c -
+
+      - name: Assemblage du site
+        run: |
+          D=/tmp/dep/node_modules
+          rm -rf _site && cp -r site _site && mkdir -p _site/ocr
+          cp /tmp/jspdf.umd.min.js _site/
+          cp $D/tesseract.js/dist/tesseract.min.js $D/tesseract.js/dist/worker.min.js _site/ocr/
+          CORE=$(node -p "require.resolve('tesseract.js-core/package.json',{paths:['$D/tesseract.js']})" | xargs dirname)
+          cp "$CORE"/tesseract-core*.wasm.js _site/ocr/
+          LANGUE=$(find $D/@tesseract.js-data/fra -name fra.traineddata.gz | sort | grep -m1 best_int || find $D/@tesseract.js-data/fra -name fra.traineddata.gz | head -1)
+          cp "$LANGUE" _site/ocr/fra.traineddata.gz
+          TV=$(node -p "require('$D/tesseract.js/package.json').version")
+          CV=$(node -p "require('$CORE/package.json').version")
+          echo "{\"tesseract\":\"$TV\",\"core\":\"$CV\",\"langue\":\"$(basename $(dirname $LANGUE))\"}" > _site/ocr/fichiers.json
+          sed -i "s/__VERSION__/${GITHUB_SHA::10}/; s/__LECTEUR__/$TV-$CV/" _site/sw.js
+          touch _site/.nojekyll
+          cat _site/ocr/fichiers.json; ls -la _site _site/ocr
+
+      - name: Essai de lecture avec le vrai lecteur
+        continue-on-error: true
+        run: ln -sfn /tmp/dep/node_modules node_modules && node test/lecture.mjs "$PWD/_site"
+
+      - name: Mise en ligne (branche gh-pages)
+        run: |
+          cd _site
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Site ${GITHUB_SHA::10}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" gh-pages
